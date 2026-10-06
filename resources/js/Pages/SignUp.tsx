@@ -4,7 +4,8 @@ import PrimaryButton from '@/Components/PrimaryButton';
 import TextInput from '@/Components/TextInput';
 import GuestLayout from '@/Layouts/GuestLayout';
 import { Head, useForm } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { Turnstile, TurnstileInstance } from '@marsidev/react-turnstile';
+import { FormEventHandler, useRef } from 'react';
 
 type Day = {
     label: string;
@@ -17,7 +18,15 @@ const optional = (label: string) => (
     </>
 );
 
-export default function SignUp({ days }: { days: Day[] }) {
+export default function SignUp({
+    days,
+    turnstileSiteKey,
+}: {
+    days: Day[];
+    turnstileSiteKey: string;
+}) {
+    const turnstile = useRef<TurnstileInstance>(null);
+
     const { data, setData, post, processing, errors } = useForm({
         name: '',
         timeslot: '',
@@ -25,12 +34,19 @@ export default function SignUp({ days }: { days: Day[] }) {
         phone: '',
         subject: '',
         instagram: '',
+        turnstile: '',
     });
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
 
-        post(route('bookings.store'));
+        post(route('bookings.store'), {
+            // Turnstile tokens are single-use, so get a fresh one before retrying.
+            onError: () => {
+                setData('turnstile', '');
+                turnstile.current?.reset();
+            },
+        });
     };
 
     return (
@@ -171,8 +187,21 @@ export default function SignUp({ days }: { days: Day[] }) {
                     <InputError message={errors.instagram} className="mt-2" />
                 </div>
 
+                <div className="mt-6">
+                    <Turnstile
+                        ref={turnstile}
+                        siteKey={turnstileSiteKey}
+                        options={{ theme: 'light', size: 'flexible' }}
+                        onSuccess={(token) => setData('turnstile', token)}
+                        onExpire={() => setData('turnstile', '')}
+                        onError={() => setData('turnstile', '')}
+                    />
+
+                    <InputError message={errors.turnstile} className="mt-2" />
+                </div>
+
                 <div className="mt-6 flex justify-end">
-                    <PrimaryButton disabled={processing}>
+                    <PrimaryButton disabled={processing || !data.turnstile}>
                         Book slot
                     </PrimaryButton>
                 </div>

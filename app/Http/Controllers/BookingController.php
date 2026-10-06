@@ -29,6 +29,7 @@ class BookingController extends Controller
                     'booked' => $booked->contains($slot->format('Y-m-d H:i')),
                 ]),
             ])->values(),
+            'turnstileSiteKey' => config('services.turnstile.site_key'),
         ]);
     }
 
@@ -37,7 +38,7 @@ class BookingController extends Controller
      */
     public function store(StoreBookingRequest $request): RedirectResponse
     {
-        $booking = Booking::create($request->validated());
+        $booking = Booking::create($request->safe()->except('turnstile'));
 
         if ($admins = config('mail.admins')) {
             // A mail failure shouldn't stop the booker from seeing their request was received.

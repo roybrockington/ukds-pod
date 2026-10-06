@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Booking;
+use App\Rules\Turnstile;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Carbon;
@@ -38,6 +39,7 @@ class StoreBookingRequest extends FormRequest
             'phone' => ['nullable', 'string', 'max:50'],
             'subject' => ['nullable', 'string', 'max:255'],
             'instagram' => ['nullable', 'string', 'max:30', 'regex:/^[A-Za-z0-9._]+$/'],
+            'turnstile' => ['required', 'string', new Turnstile],
         ];
     }
 
@@ -50,6 +52,7 @@ class StoreBookingRequest extends FormRequest
     {
         return [
             'timeslot.in' => 'Please choose one of the available timeslots.',
+            'turnstile.required' => 'Please complete the human verification check.',
             'timeslot.not_in' => 'Sorry, that timeslot has just been booked. Please choose another.',
             'instagram.regex' => 'Instagram handles can only contain letters, numbers, full stops and underscores.',
         ];

@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Models\Booking;
 use App\Notifications\BookingRequested;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
 use Illuminate\Notifications\AnonymousNotifiable;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
@@ -13,6 +15,22 @@ use Tests\TestCase;
 class BookingTest extends TestCase
 {
     use RefreshDatabase;
+
+    /**
+     * Whether the faked Cloudflare siteverify API accepts the token.
+     */
+    protected bool $turnstilePasses = true;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config(['services.turnstile.secret' => 'test-secret']);
+
+        Http::fake([
+            'challenges.cloudflare.com/*' => fn () => Http::response(['success' => $this->turnstilePasses]),
+        ]);
+    }
 
     public function test_the_booking_form_lists_the_available_timeslots(): void
     {
@@ -29,6 +47,7 @@ class BookingTest extends TestCase
     public function test_a_booking_can_be_requested(): void
     {
         $response = $this->post('/bookings', [
+            'turnstile' => 'test-token',
             'name' => 'Jane Doe',
             'timeslot' => '2026-10-24 09:15',
             'email' => 'jane@example.com',
@@ -49,6 +68,7 @@ class BookingTest extends TestCase
     public function test_optional_fields_can_be_left_blank(): void
     {
         $this->post('/bookings', [
+            'turnstile' => 'test-token',
             'name' => 'Jane Doe',
             'timeslot' => '2026-10-25 17:45',
             'email' => 'jane@example.com',
@@ -75,6 +95,7 @@ class BookingTest extends TestCase
     {
         foreach (['2026-10-24 09:00', '2026-10-24 18:15', '2026-10-26 10:15'] as $timeslot) {
             $this->post('/bookings', [
+                'turnstile' => 'test-token',
                 'name' => 'Jane Doe',
                 'timeslot' => $timeslot,
                 'email' => 'jane@example.com',
@@ -87,6 +108,7 @@ class BookingTest extends TestCase
     public function test_a_booking_cannot_confirm_itself(): void
     {
         $this->post('/bookings', [
+            'turnstile' => 'test-token',
             'name' => 'Jane Doe',
             'timeslot' => '2026-10-24 09:15',
             'email' => 'jane@example.com',
@@ -119,6 +141,7 @@ class BookingTest extends TestCase
         Booking::factory()->create(['timeslot' => '2026-10-24 09:15']);
 
         $this->post('/bookings', [
+            'turnstile' => 'test-token',
             'name' => 'Jane Doe',
             'timeslot' => '2026-10-24 09:15',
             'email' => 'jane@example.com',
@@ -133,6 +156,7 @@ class BookingTest extends TestCase
         config(['mail.admins' => ['one@example.com', 'two@example.com']]);
 
         $this->post('/bookings', [
+            'turnstile' => 'test-token',
             'name' => 'Jane Doe',
             'timeslot' => '2026-10-24 09:15',
             'email' => 'jane@example.com',
@@ -158,6 +182,7 @@ class BookingTest extends TestCase
         config(['mail.admins' => []]);
 
         $this->post('/bookings', [
+            'turnstile' => 'test-token',
             'name' => 'Jane Doe',
             'timeslot' => '2026-10-24 09:15',
             'email' => 'jane@example.com',
@@ -171,11 +196,61 @@ class BookingTest extends TestCase
         config(['mail.admins' => ['one@example.com'], 'mail.default' => 'smtp', 'mail.mailers.smtp.host' => '127.0.0.1', 'mail.mailers.smtp.port' => 1]);
 
         $this->post('/bookings', [
+            'turnstile' => 'test-token',
             'name' => 'Jane Doe',
             'timeslot' => '2026-10-24 09:15',
             'email' => 'jane@example.com',
         ])->assertRedirect(route('bookings.success'));
 
         $this->assertSame(1, Booking::count());
+    }
+
+    public function test_the_turnstile_token_is_verified_with_cloudflare(): void
+    {
+        $this->post('/bookings', [
+            'turnstile' => 'test-token',
+            'name' => 'Jane Doe',
+            'timeslot' => '2026-10-24 09:15',
+            'email' => 'jane@example.com',
+        ])->assertRedirect(route('bookings.success'));
+
+        Http::assertSent(fn (Request $request) => $request->url() === 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
+            && $request['secret'] === 'test-secret'
+            && $request['response'] === 'test-token');
+    }
+
+    public function test_a_booking_without_a_turnstile_token_is_rejected(): void
+    {
+        $this->post('/bookings', [
+            'name' => 'Jane Doe',
+            'timeslot' => '2026-10-24 09:15',
+            'email' => 'jane@example.com',
+        ])->assertSessionHasErrors('turnstile');
+
+        Http::assertNothingSent();
+        $this->assertDatabaseEmpty('bookings');
+    }
+
+    public function test_a_booking_that_fails_turnstile_is_rejected(): void
+    {
+        $this->turnstilePasses = false;
+
+        $this->post('/bookings', [
+            'turnstile' => 'bad-token',
+            'name' => 'Jane Doe',
+            'timeslot' => '2026-10-24 09:15',
+            'email' => 'jane@example.com',
+        ])->assertSessionHasErrors('turnstile');
+
+        $this->assertDatabaseEmpty('bookings');
+    }
+
+    public function test_the_form_receives_the_turnstile_site_key(): void
+    {
+        config(['services.turnstile.site_key' => 'test-site-key']);
+
+        $this->get('/')->assertInertia(fn (Assert $page) => $page
+            ->where('turnstileSiteKey', 'test-site-key')
+        );
     }
 }
