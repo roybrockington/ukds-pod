@@ -6,6 +6,7 @@ use Database\Factories\BookingFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -13,7 +14,7 @@ use Illuminate\Support\Collection;
 class Booking extends Model
 {
     /** @use HasFactory<BookingFactory> */
-    use HasFactory;
+    use HasFactory, Notifiable;
 
     /**
      * The dates on which podcast slots are available.
@@ -48,6 +49,16 @@ class Booking extends Model
             ->map(fn (Carbon $timeslot) => $timeslot->format('Y-m-d H:i'))
             ->unique()
             ->values();
+    }
+
+    /**
+     * Route mail notifications to the booker, addressed by name.
+     *
+     * @return array<string, string>
+     */
+    public function routeNotificationForMail(): array
+    {
+        return [$this->email => $this->name];
     }
 
     /**

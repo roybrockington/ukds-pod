@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\Booking;
 use App\Models\User;
+use App\Notifications\BookingConfirmed;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -100,5 +102,54 @@ class DashboardTest extends TestCase
             ->assertForbidden();
 
         $this->assertModelExists($booking);
+    }
+
+    public function test_the_booker_is_emailed_when_their_booking_is_confirmed(): void
+    {
+        Notification::fake();
+        config(['mail.admins' => ['one@example.com', 'two@example.com']]);
+
+        $booking = Booking::factory()->create([
+            'name' => 'Jane Doe',
+            'email' => 'jane@example.com',
+            'timeslot' => '2026-10-24 09:15',
+        ]);
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->patch(route('bookings.confirm', $booking));
+
+        Notification::assertSentTo($booking, function (BookingConfirmed $notification) use ($booking) {
+            $mail = $notification->toMail($booking);
+
+            return $mail->subject === 'Your podcast slot is confirmed: Saturday 24th October at 9:15am'
+                && $mail->replyTo === [['one@example.com', null], ['two@example.com', null]];
+        });
+        $this->assertSame(['jane@example.com' => 'Jane Doe'], $booking->routeNotificationForMail());
+    }
+
+    public function test_already_confirmed_bookings_are_not_emailed_again(): void
+    {
+        Notification::fake();
+
+        $booking = Booking::factory()->confirmed()->create();
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->patch(route('bookings.confirm', $booking));
+
+        Notification::assertNothingSent();
+    }
+
+    public function test_a_mail_failure_does_not_stop_the_confirmation(): void
+    {
+        config(['mail.default' => 'smtp', 'mail.mailers.smtp.host' => '127.0.0.1', 'mail.mailers.smtp.port' => 1]);
+
+        $booking = Booking::factory()->create();
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->from('/dashboard')
+            ->patch(route('bookings.confirm', $booking))
+            ->assertRedirect('/dashboard');
+
+        $this->assertTrue($booking->fresh()->confirmed);
     }
 }

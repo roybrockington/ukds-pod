@@ -3,7 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\Booking;
+use App\Notifications\BookingRequested;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Notifications\AnonymousNotifiable;
+use Illuminate\Support\Facades\Notification;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -120,6 +123,58 @@ class BookingTest extends TestCase
             'timeslot' => '2026-10-24 09:15',
             'email' => 'jane@example.com',
         ])->assertSessionHasErrors('timeslot');
+
+        $this->assertSame(1, Booking::count());
+    }
+
+    public function test_admins_are_notified_when_a_booking_is_requested(): void
+    {
+        Notification::fake();
+        config(['mail.admins' => ['one@example.com', 'two@example.com']]);
+
+        $this->post('/bookings', [
+            'name' => 'Jane Doe',
+            'timeslot' => '2026-10-24 09:15',
+            'email' => 'jane@example.com',
+            'subject' => 'Community radio',
+        ]);
+
+        Notification::assertSentOnDemand(
+            BookingRequested::class,
+            function (BookingRequested $notification, array $channels, AnonymousNotifiable $notifiable) {
+                $mail = $notification->toMail($notifiable);
+
+                return $notifiable->routes['mail'] === ['one@example.com', 'two@example.com']
+                    && $notification->booking->is(Booking::sole())
+                    && $mail->subject === 'New podcast booking request: Saturday 24th October at 9:15am'
+                    && $mail->replyTo === [['jane@example.com', 'Jane Doe']];
+            }
+        );
+    }
+
+    public function test_no_notification_is_sent_without_admin_addresses(): void
+    {
+        Notification::fake();
+        config(['mail.admins' => []]);
+
+        $this->post('/bookings', [
+            'name' => 'Jane Doe',
+            'timeslot' => '2026-10-24 09:15',
+            'email' => 'jane@example.com',
+        ])->assertRedirect(route('bookings.success'));
+
+        Notification::assertNothingSent();
+    }
+
+    public function test_a_mail_failure_does_not_stop_the_booking(): void
+    {
+        config(['mail.admins' => ['one@example.com'], 'mail.default' => 'smtp', 'mail.mailers.smtp.host' => '127.0.0.1', 'mail.mailers.smtp.port' => 1]);
+
+        $this->post('/bookings', [
+            'name' => 'Jane Doe',
+            'timeslot' => '2026-10-24 09:15',
+            'email' => 'jane@example.com',
+        ])->assertRedirect(route('bookings.success'));
 
         $this->assertSame(1, Booking::count());
     }

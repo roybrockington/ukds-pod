@@ -115,4 +115,16 @@ return [
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Admin Addresses
+    |--------------------------------------------------------------------------
+    |
+    | These addresses are notified whenever a new booking is requested. Set
+    | MAIL_ADMINS to a comma-separated list of email addresses.
+    |
+    */
+
+    'admins' => array_values(array_filter(array_map('trim', explode(',', (string) env('MAIL_ADMINS', ''))))),
+
 ];
