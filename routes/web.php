@@ -1,14 +1,21 @@
 <?php
 
+use App\Http\Controllers\BookingController;
+use App\Http\Controllers\ConfirmBookingController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DeleteBookingController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
-Route::inertia('/', 'SignUp')->name('home');
+Route::get('/', [BookingController::class, 'create'])->name('home');
+Route::post('/bookings', [BookingController::class, 'store'])->name('bookings.store');
+Route::get('/bookings/success', [BookingController::class, 'success'])->name('bookings.success');
 
-Route::get('/dashboard', function () {
-    return Inertia::render('Dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::middleware(['auth', 'verified', 'can:admin'])->group(function () {
+    Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::patch('/bookings/{booking}/confirm', ConfirmBookingController::class)->name('bookings.confirm');
+    Route::delete('/bookings/{booking}', DeleteBookingController::class)->name('bookings.destroy');
+});
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
