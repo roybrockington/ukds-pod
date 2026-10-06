@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', [BookingController::class, 'create'])->name('home');
 Route::post('/bookings', [BookingController::class, 'store'])->name('bookings.store');
 Route::get('/bookings/success', [BookingController::class, 'success'])->name('bookings.success');
+Route::inertia('/privacy', 'Privacy')->name('privacy');
 
 Route::middleware(['auth', 'verified', 'can:admin'])->group(function () {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');

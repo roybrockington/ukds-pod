@@ -3,7 +3,7 @@ import InputLabel from '@/Components/InputLabel';
 import PrimaryButton from '@/Components/PrimaryButton';
 import TextInput from '@/Components/TextInput';
 import GuestLayout from '@/Layouts/GuestLayout';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import { Turnstile, TurnstileInstance } from '@marsidev/react-turnstile';
 import { FormEventHandler, useRef } from 'react';
 
@@ -200,8 +200,23 @@ export default function SignUp({
                     <InputError message={errors.turnstile} className="mt-2" />
                 </div>
 
-                <div className="mt-6 flex justify-end">
-                    <PrimaryButton disabled={processing || !data.turnstile}>
+                <div className="mt-6 flex items-center justify-between gap-4">
+                    <p className="text-xs text-gray-500">
+                        We only use your details to manage your booking and
+                        delete them after the event. See our{' '}
+                        <Link
+                            href={route('privacy')}
+                            className="underline hover:text-gray-900"
+                        >
+                            privacy policy
+                        </Link>
+                        .
+                    </p>
+
+                    <PrimaryButton
+                        className="shrink-0"
+                        disabled={processing || !data.turnstile}
+                    >
                         Book slot
                     </PrimaryButton>
                 </div>

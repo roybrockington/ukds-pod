@@ -253,4 +253,10 @@ class BookingTest extends TestCase
             ->where('turnstileSiteKey', 'test-site-key')
         );
     }
+
+    public function test_the_privacy_policy_can_be_rendered(): void
+    {
+        $this->get('/privacy')
+            ->assertInertia(fn (Assert $page) => $page->component('Privacy'));
+    }
 }
